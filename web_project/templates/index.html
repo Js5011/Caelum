@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CO₂ Capture & Causticizing Simulator</title>
+</head>
+<body>
+    <h1>Industrial CO₂ Capture & Causticizing</h1>
+    <form method="POST">
+        <h2>Bubble Column Inputs</h2>
+        Column diameter (m): <input type="text" name="D"><br>
+        Gas flow rate (m³/s): <input type="text" name="G"><br>
+        CO₂ fraction (0-1): <input type="text" name="y_CO2"><br>
+        NaOH concentration (mol/m³): <input type="text" name="NaOH_in"><br>
+        Liquid flow rate (m³/s): <input type="text" name="L"><br>
+        Column height (m): <input type="text" name="H_sim"><br>
+        Number of slices: <input type="text" name="N_col"><br>
+
+        <h2>Causticizing Inputs</h2>
+        Total reactor volume (m³): <input type="text" name="V_total"><br>
+        Number of CSTRs: <input type="text" name="N"><br>
+        Liquid flow rate F (m³/s): <input type="text" name="F"><br>
+        Initial Ca(OH)₂ solids (mol/m³): <input type="text" name="CaOH2_0"><br>
+        Surface rate constant k (m/s): <input type="text" name="k"><br>
+        Initial specific surface area a_s0 (m²/m³): <input type="text" name="a_s0"><br>
+        Equilibrium causticizing efficiency (0–1): <input type="text" name="eta_eq"><br>
+        Simulation time (s): <input type="text" name="t_final"><br><br>
+
+        <input type="submit" value="Run Simulation">
+    </form>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simulation Results</title>
+</head>
+<body>
+    <h1>Simulation Results</h1>
+    <p>CO₂ Capture Efficiency: {{ (capture*100)|round(2) }}%</p>
+    <p>NaOH Remaining: {{ NaOH_out|round(2) }} mol/m³</p>
+    <p>Na₂CO₃ Produced: {{ Na2CO3_out|round(2) }} mol/m³</p>
+    <p>Total Na₂CO₃ in Column: {{ total_Na2CO3|round(2) }} mol</p>
+
+    <h2>Bubble Column Plot</h2>
+    <img src="data:image/png;base64,{{ plot1 }}"><br>
+
+    <h2>Multi-CSTR Plots</h2>
+    {% for plot in cstr_plots %}
+        <img src="data:image/png;base64,{{ plot }}"><br>
+    {% endfor %}
+
+    <h2>Carbon Capture Effectiveness</h2>
+    <img src="data:image/png;base64,{{ plot_cc }}"><br>
+
+    <br><a href="/">Run Another Simulation</a>
+</body>
+</html>
