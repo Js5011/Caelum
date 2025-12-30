@@ -107,8 +107,8 @@ cost_per_t = annual_cost/CO2_tpy
 st.subheader("💨 Bubble Column Performance")
 st.metric("CO₂ Capture Efficiency (%)", f"{efficiency:.1f}")
 st.metric("CO₂ Captured Annually (t/year)", f"{CO2_tpy:,.0f}")
-st.metric("Total CAPEX ($)", f"{CAPEX:,.0f}")
-st.metric("Annual OPEX ($/year)", f"{OPEX:,.0f}")
+st.metric("Total CAPEX ($)", f"{(CAPEX*1.5):,.0f}")
+st.metric("Annual OPEX ($/year)", f"{OPEX*11:,.0f}")
 
 # ===================== BUBBLE COLUMN ANIMATION =====================
 st.subheader("🎬 Bubble Column Animation")
