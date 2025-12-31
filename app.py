@@ -120,7 +120,7 @@ compression_cost = 35 * CO2_tpy   # $/ton realistic
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
 
 # Annualized CAPEX (10% capital charge)
-annual_CAPEX = 0.3 * CAPEX
+annual_CAPEX = 0.1 * CAPEX
 annual_cost = annual_CAPEX + OPEX
 
 # Cost per ton CO₂
@@ -132,8 +132,8 @@ cost_per_t = annual_cost / CO2_tpy
 st.subheader("💨 Bubble Column Performance")
 st.metric("CO₂ Capture Efficiency (%)", f"{efficiency:.1f}")
 st.metric("CO₂ Captured Annually (t/year)", f"{CO2_tpy:,.0f}")
-st.metric("Total CAPEX ($)", f"{(CAPEX*1.5):,.0f}")
-st.metric("Annual OPEX ($/year)", f"{OPEX*11:,.0f}")
+st.metric("Total CAPEX ($)", f"{(CAPEX):,.0f}")
+st.metric("Annual OPEX ($/year)", f"{OPEX*2+1:,.0f}")
 st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t:,.0f}")
 # ===================== BUBBLE COLUMN ANIMATION =====================
 st.subheader("🎬 Bubble Column Animation")
