@@ -15,7 +15,7 @@ H = st.sidebar.slider("Absorber height (m)", 5.0, 20.0, 10.0, 0.5)
 G = st.sidebar.slider("Gas flow rate (m³/s)", 0.05, 1.0, 0.25, 0.01)
 yCO2 = st.sidebar.slider("CO₂ mole fraction (0–1)", 0.01, 0.2, 0.12, 0.01)
 L = st.sidebar.slider("Liquid flow rate (m³/s)", 0.1, 1.0, 0.6, 0.01)
-C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 500, 2000, 1000, 50)
+C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 500, 3000, 1000, 50)
 
 st.sidebar.header("CSTR Train Inputs")
 V_total = st.sidebar.slider("Total Causticizer volume (m³)", 5.0, 50.0, 20.0, 1.0)
@@ -90,42 +90,42 @@ for i in range(N):
     conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
 # ===================== COST CALCULATION (FIXED PRICING) =====================
+# ===================== REALISTIC COST CALCULATION =====================
 
 # Bare equipment cost
 absorber_cost = 12000 * (A * H)**0.6
 causticizer_cost = 15000 * V_total**0.6
 bare_CAPEX = absorber_cost + causticizer_cost
 
-# Installed CAPEX (realistic Lang factor)
-LANG_FACTOR = 4.0
+# Installed CAPEX using realistic Lang factor for chemical plants
+LANG_FACTOR = 4.5  # higher than before for full installation + instrumentation
 CAPEX = bare_CAPEX * LANG_FACTOR
 
-# Pump electricity cost
-pump_power = (1.5e5 * L) / 0.7  # W
+# Pump electricity cost (assume realistic motor efficiency and annual operation)
+pump_power = (1.5e5 * L) / 0.65  # W, slightly lower efficiency
 SEC_PER_YEAR = 365 * 24 * 3600
-pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
+pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price  # $ per year
 
-# Lime cost
-lime_ton = CaOH2_in * 74.1 / 1e6 * SEC_PER_YEAR
-lime_cost = lime_ton * lime_price
+# Lime consumption and cost
+lime_ton = CaOH2_in * 74.1 / 1e6 * SEC_PER_YEAR  # convert mol/s to tons/year
+lime_cost = lime_ton * lime_price  # $/year
 
-# Fixed O&M (labor, maintenance, sensors, downtime)
-fixed_OM = 0.05 * CAPEX
+# Fixed O&M: labor, maintenance, instrumentation, downtime
+fixed_OM = 0.07 * CAPEX  # 7% of CAPEX/year
 
 # CO₂ compression + monitoring
-CO2_tpy = CO2_abs * 44.01 / 1000 * SEC_PER_YEAR
-compression_cost = 35 * CO2_tpy   # $/ton realistic
+CO2_tpy = CO2_abs * 44.01 / 1000 * SEC_PER_YEAR  # tons/year
+compression_cost = 30 * CO2_tpy   # $30/ton for compression, monitoring, transport
 
 # Total OPEX
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
 
-# Annualized CAPEX (10% capital charge)
-annual_CAPEX = 0.1 * CAPEX
+# Annualized CAPEX (capital charge)
+annual_CAPEX = 0.1 * CAPEX  # 10% capital charge/year
 annual_cost = annual_CAPEX + OPEX
 
-# Cost per ton CO₂
+# Cost per ton CO₂ (dynamic, realistic)
 cost_per_t = annual_cost / CO2_tpy
-
 
 
 # ===================== SUMMARY METRICS =====================
