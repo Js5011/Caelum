@@ -133,7 +133,7 @@ st.subheader("💨 Bubble Column Performance")
 st.metric("CO₂ Capture Efficiency (%)", f"{efficiency:.1f}")
 st.metric("CO₂ Captured Annually (t/year)", f"{CO2_tpy:,.0f}")
 st.metric("Total CAPEX ($)", f"{(CAPEX):,.0f}")
-st.metric("Annual OPEX ($/year)", f"{OPEX*2+1:,.0f}")
+st.metric("Annual OPEX ($/year)", f"{OPEX*3:,.0f}")
 st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t*3:,.0f}")
 # ===================== BUBBLE COLUMN ANIMATION =====================
 st.subheader("🎬 Bubble Column Animation")
