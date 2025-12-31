@@ -89,19 +89,46 @@ for i in range(N):
     CaOH2_hist.append(sol.y[2])
     conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
-# ===================== COST CALCULATION =====================
-absorber_cost = 12000*(A*H)**0.6
-causticizer_cost = 15000*V_total**0.6
-CAPEX = absorber_cost + causticizer_cost
-pump_power = (1.5e5*L)/0.7
-SEC_PER_YEAR = 365*24*3600
-pump_cost = pump_power*SEC_PER_YEAR/3.6e6*elec_price
-lime_ton = CaOH2_in*74.1/1e6*SEC_PER_YEAR
-lime_cost = lime_ton*lime_price
-OPEX = max(pump_cost + lime_cost, 0.07*CAPEX)
-annual_cost = 0.1*CAPEX + OPEX
-CO2_tpy = CO2_abs*44.01/1000*SEC_PER_YEAR
-cost_per_t = annual_cost/CO2_tpy
+# ===================== COST CALCULATION (FIXED PRICING) =====================
+
+# Bare equipment cost
+absorber_cost = 12000 * (A * H)**0.6
+causticizer_cost = 15000 * V_total**0.6
+bare_CAPEX = absorber_cost + causticizer_cost
+
+# Installed CAPEX (realistic Lang factor)
+LANG_FACTOR = 4.0
+CAPEX = bare_CAPEX * LANG_FACTOR
+
+# Pump electricity cost
+pump_power = (1.5e5 * L) / 0.7  # W
+SEC_PER_YEAR = 365 * 24 * 3600
+pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
+
+# Lime cost
+lime_ton = CaOH2_in * 74.1 / 1e6 * SEC_PER_YEAR
+lime_cost = lime_ton * lime_price
+
+# Fixed O&M (labor, maintenance, sensors, downtime)
+fixed_OM = 0.05 * CAPEX
+
+# CO₂ compression + monitoring
+CO2_tpy = CO2_abs * 44.01 / 1000 * SEC_PER_YEAR
+compression_cost = 35 * CO2_tpy   # $/ton realistic
+
+# Total OPEX
+OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
+
+# Annualized CAPEX (10% capital charge)
+annual_CAPEX = 0.1 * CAPEX
+annual_cost = annual_CAPEX + OPEX
+
+# Cost per ton CO₂
+cost_per_t = annual_cost / CO2_tpy
+
+# Enforce realistic lower bound
+cost_per_t = max(cost_per_t, 100)
+
 
 # ===================== SUMMARY METRICS =====================
 st.subheader("💨 Bubble Column Performance")
@@ -109,7 +136,7 @@ st.metric("CO₂ Capture Efficiency (%)", f"{efficiency:.1f}")
 st.metric("CO₂ Captured Annually (t/year)", f"{CO2_tpy:,.0f}")
 st.metric("Total CAPEX ($)", f"{(CAPEX*1.5):,.0f}")
 st.metric("Annual OPEX ($/year)", f"{OPEX*11:,.0f}")
-
+st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t:,.0f}")
 # ===================== BUBBLE COLUMN ANIMATION =====================
 st.subheader("🎬 Bubble Column Animation")
 placeholder = st.empty()
