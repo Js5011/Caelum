@@ -120,14 +120,12 @@ compression_cost = 35 * CO2_tpy   # $/ton realistic
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
 
 # Annualized CAPEX (10% capital charge)
-annual_CAPEX = 0.1 * CAPEX
+annual_CAPEX = 0.3 * CAPEX
 annual_cost = annual_CAPEX + OPEX
 
 # Cost per ton CO₂
 cost_per_t = annual_cost / CO2_tpy
 
-# Enforce realistic lower bound
-cost_per_t = max(cost_per_t, 100)
 
 
 # ===================== SUMMARY METRICS =====================
