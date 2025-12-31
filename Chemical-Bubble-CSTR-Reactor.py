@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+import pandas as pd
 
 # ===================== CONSTANTS =====================
 R = 8.314
@@ -30,10 +31,9 @@ vG = G/A
 vL = L/A
 
 # ===================== BUBBLE COLUMN MODEL =====================
-# ===================== BUBBLE COLUMN MODEL FIXED =====================
-kLa = 0.2 * (vG / 0.1)**0.7     # increase kLa to typical industrial values
-k_rxn = 5000                    # reaction coefficient (mol/m3/s)
-H_CO2 = 3.4e4                   # Henry constant (Pa·m³/mol)
+kLa = 0.2 * (vG / 0.1)**0.7
+k_rxn = 5000
+H_CO2 = 3.4e4
 
 Cg0 = yCO2*P/(R*T)
 Cl0 = 0.0
@@ -43,10 +43,7 @@ def absorber(z, y):
     P_CO2 = Cg*R*T
     C_star = P_CO2/H_CO2
     N_mt = kLa*(C_star - Cl)
-    
-    # reaction limited by NaOH, remove artificial cap
     r_rxn = k_rxn * Cl * (NaOH / (NaOH + 1000))
-    
     dCgdz = -N_mt/vG
     dCldz = (N_mt - r_rxn)/vL
     dNaOHdz = -2*r_rxn/vL
@@ -59,8 +56,7 @@ Cg, Cl, NaOH = sol_abs.y
 CO2_abs = max(G*(Cg0 - Cg[-1]), 1e-4)
 CO2_out = G*Cg[-1]
 efficiency = 100*(1 - CO2_out/(G*Cg0))
-print(f"Bubble column CO₂ capture efficiency: {efficiency:.1f}%")
-
+print(f"\nBubble column CO₂ capture efficiency: {efficiency:.1f}%")
 
 # ===================== CSTR TRAIN =====================
 V = V_total/N
@@ -102,82 +98,111 @@ annual_cost = 0.1*CAPEX + OPEX
 CO2_tpy = CO2_abs*44.01/1000*SEC_PER_YEAR
 cost_per_t = annual_cost/CO2_tpy
 
-# ===================== OUTPUT =====================
-print(f"\nCO₂ capture efficiency: {100*(1 - CO2_out/(G*Cg0)):.1f}%")
-print(f"CO₂ captured: {CO2_tpy:,.0f} t/year")
+print(f"\nCO₂ captured: {CO2_tpy:,.0f} t/year")
 print(f"Cost of capture: ${cost_per_t:,.0f}/tCO₂")
 
-# ===================== VISUALS =====================
-plt.style.use('ggplot')   # Safe built-in style
+# ===================== SENSITIVITY ANALYSIS =====================
+baseline = {
+    "D": D, "H": H, "G": G, "yCO2": yCO2, "L": L, "C_NaOH0": C_NaOH0,
+    "V_total": V_total, "N": N, "k_caus": k_caus, "eta_eq": eta_eq,
+    "elec_price": elec_price, "lime_price": lime_price
+}
 
-# Bubble column profiles
-plt.figure(figsize=(10,6))
-plt.plot(Cg/Cg0*100, z_eval, 'b-', lw=3, label='Gas CO₂ (%)')
-plt.plot(Cl/Cl.max()*100, z_eval, 'r--', lw=2, label='Liquid CO₂ (%)')
-plt.plot(NaOH/C_NaOH0*100, z_eval, 'g-.', lw=2, label='NaOH remaining (%)')
-plt.xlabel("Relative concentration (%)")
-plt.ylabel("Height (m)")
-plt.title("Bubble Column Concentration Profiles")
-plt.legend(loc='center right')
-plt.grid(True)
-plt.show()
+# Define variable ranges for sensitivity
+sensitivity_ranges = {
+    "H": np.linspace(0.5*H, 1.5*H, 5),
+    "G": np.linspace(0.7*G, 1.3*G, 5),
+    "C_NaOH0": np.linspace(0.5*C_NaOH0, 2*C_NaOH0, 5),
+    "elec_price": np.linspace(0.5*elec_price, 1.5*elec_price, 5)
+}
 
-# CO₂ removal fraction along column
-plt.figure(figsize=(8,5))
-plt.plot((Cg0-Cg)/Cg0*100, z_eval, color='darkorange', lw=3)
-plt.xlabel("Cumulative CO₂ removed (%)")
-plt.ylabel("Column height (m)")
-plt.title("CO₂ Removal Along Bubble Column")
-plt.grid(True)
-plt.show()
+def run_full_model(H_val, G_val, C_NaOH_val, elec_val):
+    # Update parameters
+    vG_val = G_val/A
+    vL_val = L/A
+    kLa_val = 0.2 * (vG_val / 0.1)**0.7
 
-# CSTR dynamics over time
-plt.figure(figsize=(10,6))
-colors = ['b','r','g','m','c']
-for i in range(N):
-    plt.plot(tspan/60, Na2CO3_hist[i], color=colors[i%5], lw=2, label=f'Na₂CO₃ CSTR {i+1}')
-    plt.plot(tspan/60, NaOH_hist[i], color=colors[i%5], lw=2, ls='--', label=f'NaOH CSTR {i+1}')
-    plt.plot(tspan/60, CaOH2_hist[i], color=colors[i%5], lw=2, ls=':', label=f'Ca(OH)₂ CSTR {i+1}')
-plt.xlabel("Time (min)")
-plt.ylabel("Molar flow (mol/s)")
-plt.title("CSTR Concentrations Over Time")
-plt.legend(ncol=2, fontsize=9)
-plt.grid(True)
-plt.show()
+    # Bubble column
+    def absorber_local(z, y):
+        Cg, Cl, NaOH = y
+        P_CO2 = Cg*R*T
+        C_star = P_CO2/H_CO2
+        N_mt = kLa_val*(C_star - Cl)
+        r_rxn = k_rxn * Cl * (NaOH / (NaOH + 1000))
+        dCgdz = -N_mt/vG_val
+        dCldz = (N_mt - r_rxn)/vL_val
+        dNaOHdz = -2*r_rxn/vL_val
+        return [dCgdz, dCldz, dNaOHdz]
 
-# CSTR conversion fraction
-plt.figure(figsize=(8,5))
-for i in range(N):
-    plt.plot(tspan/60, conv_hist[i], lw=2, label=f'CSTR {i+1}')
-plt.xlabel("Time (min)")
-plt.ylabel("Conversion (%)")
-plt.title("CSTR Na₂CO₃ Conversion Over Time")
+    sol_abs = solve_ivp(absorber_local,[0,H_val],[Cg0,0,C_NaOH_val], t_eval=z_eval)
+    Cg_end = sol_abs.y[0,-1]
+    CO2_abs_val = max(G_val*(Cg0 - Cg_end),1e-4)
+
+    # CSTRs (simplified)
+    Na2CO3_in = CO2_abs_val
+    NaOH_in = 0.0
+    CaOH2_in = CO2_abs_val*1.05
+    for i in range(N):
+        def cstr_local(t,y):
+            Na2CO3, NaOH, CaOH2 = y
+            r = k_caus*Na2CO3*(1 - NaOH/(NaOH+Na2CO3+1))
+            r = min(r, eta_eq*Na2CO3/tau)
+            return [-r, 2*r, -r]
+        sol = solve_ivp(cstr_local,[0,tspan[-1]],[Na2CO3_in,NaOH_in,CaOH2_in], t_eval=[tspan[-1]])
+        Na2CO3_in, NaOH_in, CaOH2_in = sol.y[:,-1]
+
+    # Costs
+    absorber_cost_val = 12000*(A*H_val)**0.6
+    causticizer_cost_val = 15000*V_total**0.6
+    CAPEX_val = absorber_cost_val + causticizer_cost_val
+    pump_power_val = (1.5e5*L)/0.7
+    pump_cost_val = pump_power_val*SEC_PER_YEAR/3.6e6*elec_val
+    lime_ton_val = CaOH2_in*74.1/1e6*SEC_PER_YEAR
+    lime_cost_val = lime_ton_val*lime_price
+    OPEX_val = max(pump_cost_val + lime_cost_val, 0.07*CAPEX_val)
+    annual_cost_val = 0.1*CAPEX_val + OPEX_val
+    CO2_tpy_val = CO2_abs_val*44.01/1000*SEC_PER_YEAR
+    cost_per_t_val = annual_cost_val/CO2_tpy_val
+
+    return CO2_tpy_val, cost_per_t_val
+
+# Run sensitivity analysis
+results = []
+for var, values in sensitivity_ranges.items():
+    for v in values:
+        H_val = H if var!="H" else v
+        G_val = G if var!="G" else v
+        C_val = C_NaOH0 if var!="C_NaOH0" else v
+        elec_val = elec_price if var!="elec_price" else v
+        CO2_tpy_val, cost_val = run_full_model(H_val, G_val, C_val, elec_val)
+        results.append({"Variable": var, "Value": v, "CO2_tpy": CO2_tpy_val, "Cost_per_t": cost_val})
+
+df_sens = pd.DataFrame(results)
+
+# ===================== PLOTS =====================
+# Spider plot
+plt.figure(figsize=(8,6))
+for var in sensitivity_ranges.keys():
+    subset = df_sens[df_sens["Variable"]==var]
+    plt.plot(subset["Value"], subset["Cost_per_t"], lw=2, marker='o', label=var)
+plt.xlabel("Variable value")
+plt.ylabel("Cost ($/t CO₂)")
+plt.title("Sensitivity Analysis - Cost vs Variable")
 plt.legend()
 plt.grid(True)
 plt.show()
 
-# CO₂ mass balance
-plt.figure(figsize=(6,5))
-plt.bar(["Inlet","Captured","Outlet"], [G*Cg0, CO2_abs, CO2_out], color=['blue','green','red'])
-plt.ylabel("Molar flow (mol/s)")
-plt.title("CO₂ Mass Balance")
-plt.grid(axis='y')
-plt.show()
+# Tornado plot
+tornado = []
+for var in sensitivity_ranges.keys():
+    subset = df_sens[df_sens["Variable"]==var]
+    delta = subset["Cost_per_t"].max() - subset["Cost_per_t"].min()
+    tornado.append((var, delta))
 
-# CAPEX/OPEX breakdown
-plt.figure(figsize=(6,6))
-plt.pie([0.1*CAPEX,pump_cost,lime_cost], labels=["Annualized CAPEX","Pumping","Lime"], autopct="%1.1f%%", colors=['gold','skyblue','lightgreen'])
-plt.title("Annual Cost Breakdown")
-plt.show()
-
-# Final CSTR stage concentrations
-plt.figure(figsize=(8,5))
-plt.plot(range(1,N+1), [h[-1] for h in NaOH_hist], 'b-o', label='NaOH')
-plt.plot(range(1,N+1), [h[-1] for h in CaOH2_hist], 'r-s', label='Ca(OH)₂')
-plt.plot(range(1,N+1), [h[-1] for h in Na2CO3_hist], 'g-^', label='Na₂CO₃')
-plt.xlabel("CSTR Stage")
-plt.ylabel("Final Concentration (mol/s)")
-plt.title("Final Concentrations per CSTR Stage")
-plt.legend()
-plt.grid(True)
+tornado_df = pd.DataFrame(tornado, columns=["Variable","Cost Impact"]).sort_values("Cost Impact")
+plt.figure(figsize=(6,4))
+plt.barh(tornado_df["Variable"], tornado_df["Cost Impact"], color='skyblue')
+plt.xlabel("Δ Cost ($/t CO₂)")
+plt.title("Tornado Plot - Cost Sensitivity")
+plt.grid(axis='x')
 plt.show()
