@@ -90,48 +90,42 @@ for i in range(N):
     conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
 # ===================== COST CALCULATION (FIXED PRICING) =====================
+# ===================== COST CALCULATION (FINAL, DEBUGGED) =====================
 
-# ===================== COST CALCULATION (REALISTIC, FINAL) =====================
+SEC_PER_YEAR = 365 * 24 * 3600
+capacity_factor = 0.85
+
+# ---- Annual CO₂ captured ----
+CO2_mol_s = CO2_abs * capacity_factor
+CO2_tpy = CO2_mol_s * 44.01 / 1000 * SEC_PER_YEAR
 
 # ---- Installed CAPEX ----
 absorber_cost = 18000 * (A * H)**0.62
 causticizer_cost = 22000 * V_total**0.6
 
 bare_CAPEX = absorber_cost + causticizer_cost
-
-LANG_FACTOR = 3.2
-OWNER_COST = 0.15   # owner’s + contingency
-CAPEX = bare_CAPEX * LANG_FACTOR * (1 + OWNER_COST)
+CAPEX = bare_CAPEX * 3.2 * 1.15   # Lang + owner’s cost
 
 
 # ---- Pump electricity ----
 pump_eff = 0.7
-deltaP = 1.5e5  # Pa
-pump_power = (deltaP * L) / pump_eff  # W
-
-SEC_PER_YEAR = 365 * 24 * 3600
+deltaP = 1.5e5
+pump_power = (deltaP * L) / pump_eff
 pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
 
 
-# ---- Lime cost (stoichiometric) ----
-CO2_mol_s = CO2_abs
-CaOH2_mol_s = CO2_mol_s  # 1:1 stoichiometry
-CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000  # tons/year
+# ---- Lime cost (capacity-factor corrected) ----
+CaOH2_mol_s = CO2_mol_s
+CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000
 lime_cost = CaOH2_tpy * lime_price
 
 
-# ---- Fixed O&M (DAC-realistic) ----
-fixed_OM = 0.045 * CAPEX   # 4.5% of CAPEX
+# ---- Fixed O&M ----
+fixed_OM = 0.045 * CAPEX
 
 
-# ---- CO₂ compression + MRV ----
-CO2_tpy = CO2_abs * 44.01 / 1000 * SEC_PER_YEAR
-compression_cost = 25 * CO2_tpy   # includes drying + MRV
-
-
-# ---- Capacity factor ----
-capacity_factor = 0.85
-CO2_tpy *= capacity_factor
+# ---- Compression + MRV ----
+compression_cost = 25 * CO2_tpy
 
 
 # ---- Total costs ----
