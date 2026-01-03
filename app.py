@@ -91,43 +91,56 @@ for i in range(N):
 
 # ===================== COST CALCULATION (FIXED PRICING) =====================
 
-# Bare equipment cost
-absorber_cost = 12000 * (A * H)**0.6
-causticizer_cost = 15000 * V_total**0.6
+# ===================== COST CALCULATION (REALISTIC, FINAL) =====================
+
+# ---- Installed CAPEX ----
+absorber_cost = 18000 * (A * H)**0.62
+causticizer_cost = 22000 * V_total**0.6
+
 bare_CAPEX = absorber_cost + causticizer_cost
 
-# Installed CAPEX (realistic Lang factor)
-LANG_FACTOR = 4.0
-CAPEX = bare_CAPEX * LANG_FACTOR
+LANG_FACTOR = 3.2
+OWNER_COST = 0.15   # owner’s + contingency
+CAPEX = bare_CAPEX * LANG_FACTOR * (1 + OWNER_COST)
 
-# Pump electricity cost
-pump_power = (1.5e5 * L) / 0.7  # W
+
+# ---- Pump electricity ----
+pump_eff = 0.7
+deltaP = 1.5e5  # Pa
+pump_power = (deltaP * L) / pump_eff  # W
+
 SEC_PER_YEAR = 365 * 24 * 3600
 pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
 
-# Lime cost
-lime_ton = CaOH2_in * 74.1 / 1e6 * SEC_PER_YEAR
-lime_cost = lime_ton * lime_price
 
-# Fixed O&M (labor, maintenance, sensors, downtime)
-fixed_OM = 0.05 * CAPEX
+# ---- Lime cost (stoichiometric) ----
+CO2_mol_s = CO2_abs
+CaOH2_mol_s = CO2_mol_s  # 1:1 stoichiometry
+CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000  # tons/year
+lime_cost = CaOH2_tpy * lime_price
 
-# CO₂ compression + monitoring
+
+# ---- Fixed O&M (DAC-realistic) ----
+fixed_OM = 0.045 * CAPEX   # 4.5% of CAPEX
+
+
+# ---- CO₂ compression + MRV ----
 CO2_tpy = CO2_abs * 44.01 / 1000 * SEC_PER_YEAR
-compression_cost = 35 * CO2_tpy   # $/ton realistic
+compression_cost = 25 * CO2_tpy   # includes drying + MRV
 
-# Total OPEX
+
+# ---- Capacity factor ----
+capacity_factor = 0.85
+CO2_tpy *= capacity_factor
+
+
+# ---- Total costs ----
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
-
-# Annualized CAPEX (10% capital charge)
-annual_CAPEX = 0.1 * CAPEX
+annual_CAPEX = 0.10 * CAPEX
 annual_cost = annual_CAPEX + OPEX
 
-# Cost per ton CO₂
 cost_per_t = annual_cost / CO2_tpy
 
-# Enforce realistic lower bound
-cost_per_t = max(cost_per_t, 100)
 
 
 # ===================== SUMMARY METRICS =====================
