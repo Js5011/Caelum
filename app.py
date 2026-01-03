@@ -91,7 +91,7 @@ for i in range(N):
 
 # ===================== COST CALCULATION (FIXED PRICING) =====================
 # ===================== COST CALCULATION (FINAL, DEBUGGED) =====================
-
+ 
 SEC_PER_YEAR = 365 * 24 * 3600
 capacity_factor = 0.85
 
