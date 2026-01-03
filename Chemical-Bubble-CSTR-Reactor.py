@@ -81,35 +81,125 @@ def run_cstr(CO2_abs_val):
     return Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist, tspan
 
 # ===================== COST FUNCTION =====================
+import numpy as np
+from scipy.integrate import solve_ivp
+
+# ===================== CONSTANTS =====================
+R = 8.314
+T = 298
+P = 101325
+SEC_PER_YEAR = 365*24*3600
+
+# ===================== EXAMPLE FIXED INPUTS =====================
+C_NaOH0 = 1500  # mol/m³ (1.5 M)
+V_total = 500   # m³
+N = 3           # Number of CSTRs
+k_caus = 0.001  # 1/s
+eta_eq = 0.95
+elec_price = 0.10
+lime_price = 300
+yCO2 = 0.12      # CO2 mole fraction in gas
+
+# ===================== CORE FUNCTIONS =====================
+
+def run_full_model(H_val, G_val, C_NaOH0_val, elec_val):
+    """Runs bubble column + CSTR simulation and computes cost."""
+    
+    # Geometry
+    D_val = 10  # m (example, could also be input)
+    A = np.pi*(D_val/2)**2
+    vG = G_val/A
+    vL = 1.2/A  # example liquid flow
+    
+    # Bubble column
+    kLa = 0.2 * (vG / 0.1)**0.7
+    k_rxn = 5000
+    H_CO2 = 3.4e4
+    Cg0 = yCO2*P/(R*T)
+    Cl0 = 0.0
+
+    def absorber(z, y):
+        Cg, Cl, NaOH = y
+        P_CO2 = Cg*R*T
+        C_star = P_CO2/H_CO2
+        N_mt = kLa*(C_star - Cl)
+        r_rxn = k_rxn * Cl * (NaOH / (NaOH + 1000))
+        dCgdz = -N_mt/vG
+        dCldz = (N_mt - r_rxn)/vL
+        dNaOHdz = -2*r_rxn/vL
+        return [dCgdz, dCldz, dNaOHdz]
+
+    z_eval = np.linspace(0,H_val,300)
+    sol_abs = solve_ivp(absorber,[0,H_val],[Cg0,Cl0,C_NaOH0_val], t_eval=z_eval)
+    Cg, Cl, NaOH = sol_abs.y
+
+    CO2_abs = max(G_val*(Cg0 - Cg[-1]), 1e-4)
+    CO2_out = G_val*Cg[-1]
+    efficiency = 100*(1 - CO2_out/(G_val*Cg0))
+
+    # CSTR train
+    V = V_total/N
+    F = 1.2
+    tau = V/F
+    Na2CO3_in = CO2_abs
+    NaOH_in = 0.0
+    CaOH2_in = CO2_abs*1.05
+    tspan = np.linspace(0,4*tau,300)
+
+    Na2CO3_hist = []
+    NaOH_hist = []
+    CaOH2_hist = []
+
+    for i in range(N):
+        def cstr(t,y):
+            Na2CO3, NaOH, CaOH2 = y
+            r = k_caus*Na2CO3*(1 - NaOH/(NaOH+Na2CO3+1))
+            r = min(r, eta_eq*Na2CO3/tau)
+            return [-r, 2*r, -r]
+        sol = solve_ivp(cstr,[0,tspan[-1]],[Na2CO3_in,NaOH_in,CaOH2_in], t_eval=tspan)
+        Na2CO3_in, NaOH_in, CaOH2_in = sol.y[:,-1]
+        Na2CO3_hist.append(sol.y[0])
+        NaOH_hist.append(sol.y[1])
+        CaOH2_hist.append(sol.y[2])
+
+    # Compute cost
+    CO2_tpy, cost_per_t = compute_cost(CO2_abs, CaOH2_hist[-1], H_val, G_val, elec_val)
+
+    return CO2_tpy, cost_per_t, efficiency
+
 def compute_cost(CO2_abs_val, CaOH2_final, H_val, G_val, elec_val):
-    absorber_cost_val = 12000*(A*H_val)**0.6
-    causticizer_cost_val = 15000*V_total**0.6
-    CAPEX_val = absorber_cost_val + causticizer_cost_val
-    pump_power_val = (1.5e5*L)/0.7
-    pump_cost_val = pump_power_val*SEC_PER_YEAR/3.6e6*elec_val
-    lime_ton_val = CaOH2_final*74.1/1e6*SEC_PER_YEAR
-    lime_cost_val = lime_ton_val*lime_price
+    """Compute CAPEX, OPEX, and cost per ton, handling arrays safely."""
+    D_val = 10
+    A = np.pi*(D_val/2)**2
+
+    # CAPEX
+    absorber_cost = 12000*(A*H_val)**0.6
+    causticizer_cost = 15000*V_total**0.6
+    CAPEX_val = float(absorber_cost + causticizer_cost)
+
+    # Pumping
+    pump_power = (1.5e5*1.2)/0.7
+    pump_cost_val = float(pump_power*SEC_PER_YEAR/3.6e6*elec_val)
+
+    # Lime cost
+    if isinstance(CaOH2_final, np.ndarray):
+        CaOH2_final = CaOH2_final[-1]  # take last element if array
+    lime_ton_val = float(CaOH2_final*74.1/1e6*SEC_PER_YEAR)
+    lime_cost_val = float(lime_ton_val*lime_price)
+
+    # OPEX
     OPEX_val = max(pump_cost_val + lime_cost_val, 0.07*CAPEX_val)
     annual_cost_val = 0.1*CAPEX_val + OPEX_val
-    CO2_tpy_val = CO2_abs_val*44.01/1000*SEC_PER_YEAR
-    cost_per_t_val = annual_cost_val/CO2_tpy_val
+
+    # Annual CO2 captured
+    CO2_tpy_val = float(CO2_abs_val*44.01/1000*SEC_PER_YEAR)
+    cost_per_t_val = annual_cost_val / CO2_tpy_val
+
     return CO2_tpy_val, cost_per_t_val
 
-# ===================== FULL MODEL FUNCTION =====================
-def run_full_model(H_val, G_val, C_NaOH_val, elec_val):
-    vG_val = G_val/A
-    vL_val = L/A
-    kLa_val = 0.2 * (vG_val / 0.1)**0.7
-    sol_abs = solve_ivp(lambda z, y: absorber(z, y, vG_val, vL_val, kLa_val, C_NaOH_val),
-                        [0,H_val],[Cg0,0,C_NaOH_val], t_eval=z_eval)
-    Cg_end = sol_abs.y[0,-1]
-    CO2_abs_val = max(G_val*(Cg0 - Cg_end),1e-4)
-    Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist, tspan = run_cstr(CO2_abs_val)
-    CO2_tpy_val, cost_val = compute_cost(CO2_abs_val, CaOH2_hist[-1], H_val, G_val, elec_val)
-    return CO2_tpy_val, cost_val
 
 # ===================== RUN BASELINE =====================
-CO2_tpy, cost_per_t = run_full_model(H, G, C_NaOH0, elec_price)
+CO2_tpy, cost_per_t, efficiency = run_full_model(H, G, C_NaOH0, elec_price)
 print(f"\nBaseline CO₂ captured: {CO2_tpy:,.0f} t/year")
 print(f"Baseline cost of capture: ${cost_per_t:,.0f}/tCO₂")
 
@@ -128,7 +218,7 @@ for var, values in sensitivity_ranges.items():
         G_val = G if var!="G" else v
         C_val = C_NaOH0 if var!="C_NaOH0" else v
         elec_val = elec_price if var!="elec_price" else v
-        CO2_tpy_val, cost_val = run_full_model(H_val, G_val, C_val, elec_val)
+        CO2_tpy_val, cost_val, thing = run_full_model(H_val, G_val, C_val, elec_val)
         results.append({"Variable": var, "Value": v, "CO2_tpy": CO2_tpy_val, "Cost_per_t": cost_val})
 
 df_sens = pd.DataFrame(results)
@@ -199,3 +289,4 @@ print(f"Median cost: ${median_cost:.1f}/tCO₂")
 print(f"Min cost: ${min_cost:.1f}/tCO₂")
 print(f"Max cost: ${max_cost:.1f}/tCO₂")
 print(f"Probability cost < $100/t: {prob_under_100:.1f}%")
+print(f"Carbon Capture Efficiency: {efficiency}")
