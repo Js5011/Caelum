@@ -59,7 +59,7 @@ def run_models(D,H,G,L,C_NaOH0,V_total,N,k_caus,eta_eq):
         dNaOHdz = -2*r_rxn/vL
         return [dCgdz, dCldz, dNaOHdz]
 
-    z_eval = np.linspace(0,H,300)
+    z_eval = np.linspace(0,H,50)
     sol_abs = solve_ivp(absorber,[0,H],[Cg0,Cl0,C_NaOH0], t_eval=z_eval)
     Cg, Cl, NaOH = sol_abs.y
 
@@ -74,7 +74,7 @@ def run_models(D,H,G,L,C_NaOH0,V_total,N,k_caus,eta_eq):
     NaOH_in = 0.0
     CaOH2_in = Na2CO3_in*1.05
 
-    tspan = np.linspace(0, 4*tau, 200)
+    tspan = np.linspace(0,4*tau,50)
     Na2CO3_hist = []
     NaOH_hist = []
     CaOH2_hist = []
