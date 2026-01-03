@@ -27,7 +27,7 @@ elec_price = st.sidebar.number_input("Electricity price ($/kWh)", 0.05, 0.5, 0.1
 lime_price = st.sidebar.number_input("Lime price ($/ton Ca(OH)₂)", 50, 500, 150, 10)
 
 # ===================== ANIMATION OPTION =====================
-run_animation = st.checkbox("▶ Run animations (slower)")
+run_animation = st.checkbox("▶ Run animations (slower, reduced resolution)")
 
 # ===================== GEOMETRY =====================
 A = np.pi*(D/2)**2
@@ -59,10 +59,10 @@ def run_models(D,H,G,L,C_NaOH0,V_total,N,k_caus,eta_eq):
         dNaOHdz = -2*r_rxn/vL
         return [dCgdz, dCldz, dNaOHdz]
 
-    z_eval = np.linspace(0,H,50)
-    sol_abs = solve_ivp(absorber,[0,H],[Cg0,Cl0,C_NaOH0], t_eval=z_eval)
+    # Use full resolution for computation, but minimal points for animation
+    z_eval_full = np.linspace(0,H,300)
+    sol_abs = solve_ivp(absorber,[0,H],[Cg0,Cl0,C_NaOH0], t_eval=z_eval_full)
     Cg, Cl, NaOH = sol_abs.y
-
     CO2_abs = max(G*(Cg0 - Cg[-1]), 1e-4)
     efficiency = 100*(1 - (G*Cg[-1])/(G*Cg0))
 
@@ -74,7 +74,7 @@ def run_models(D,H,G,L,C_NaOH0,V_total,N,k_caus,eta_eq):
     NaOH_in = 0.0
     CaOH2_in = Na2CO3_in*1.05
 
-    tspan = np.linspace(0,4*tau,50)
+    tspan_full = np.linspace(0, 4*tau, 200)
     Na2CO3_hist = []
     NaOH_hist = []
     CaOH2_hist = []
@@ -86,14 +86,14 @@ def run_models(D,H,G,L,C_NaOH0,V_total,N,k_caus,eta_eq):
             r = k_caus*Na2CO3*(1 - NaOH/(NaOH+Na2CO3+1))
             r = min(r, eta_eq*Na2CO3/tau)
             return [-r, 2*r, -r]
-        sol = solve_ivp(cstr,[0,tspan[-1]],[Na2CO3_in,NaOH_in,CaOH2_in], t_eval=tspan)
+        sol = solve_ivp(cstr,[0,tspan_full[-1]],[Na2CO3_in,NaOH_in,CaOH2_in], t_eval=tspan_full)
         Na2CO3_in, NaOH_in, CaOH2_in = sol.y[:,-1]
         Na2CO3_hist.append(sol.y[0])
         NaOH_hist.append(sol.y[1])
         CaOH2_hist.append(sol.y[2])
         conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
-    return z_eval, Cg, Cl, NaOH, CO2_abs, efficiency, tspan, Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist
+    return z_eval_full, Cg, Cl, NaOH, CO2_abs, efficiency, tspan_full, Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist
 
 # Run cached computation
 (z_eval, Cg, Cl, NaOH, CO2_abs, efficiency,
@@ -103,34 +103,26 @@ def run_models(D,H,G,L,C_NaOH0,V_total,N,k_caus,eta_eq):
 SEC_PER_YEAR = 365 * 24 * 3600
 capacity_factor = 0.85
 
-# Annual CO2 captured
 CO2_mol_s = CO2_abs * capacity_factor
 CO2_tpy = CO2_mol_s * 44.01 / 1000 * SEC_PER_YEAR
 
-# Installed CAPEX
 absorber_cost = 18000 * (A * H)**0.62
 causticizer_cost = 22000 * V_total**0.6
 bare_CAPEX = absorber_cost + causticizer_cost
 CAPEX = bare_CAPEX * 3.2 * 1.15
 
-# Pump electricity
 pump_eff = 0.7
 deltaP = 1.5e5
 pump_power = (deltaP * L) / pump_eff
 pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
 
-# Lime cost
 CaOH2_mol_s = CO2_mol_s
 CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000
 lime_cost = CaOH2_tpy * lime_price
 
-# Fixed O&M
 fixed_OM = 0.045 * CAPEX
-
-# Compression + MRV
 compression_cost = 25 * CO2_tpy
 
-# Total costs
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
 annual_CAPEX = 0.10 * CAPEX
 annual_cost = annual_CAPEX + OPEX
@@ -144,15 +136,16 @@ st.metric("Total CAPEX ($)", f"{CAPEX:,.0f}")
 st.metric("Annual OPEX ($/year)", f"{OPEX:,.0f}")
 st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t:,.0f}")
 
-# ===================== OPTIONAL ANIMATIONS =====================
+# ===================== OPTIONAL ANIMATIONS (REDUCED RESOLUTION) =====================
 if run_animation:
     st.subheader("🎬 Bubble Column Animation")
     placeholder = st.empty()
-    for frame in range(1, len(z_eval), 3):
+    z_eval_anim = z_eval[::6]   # reduced frames for speed
+    for frame in range(1, len(z_eval_anim)):
         fig, ax = plt.subplots(figsize=(7,5))
-        ax.plot(Cg[:frame]/Cg[0]*100, z_eval[:frame], 'b-', lw=3, label='Gas CO₂ (%)')
-        ax.plot(Cl[:frame]/Cl.max()*100, z_eval[:frame], 'r--', lw=2, label='Liquid CO₂ (%)')
-        ax.plot(NaOH[:frame]/NaOH[0]*100, z_eval[:frame], 'g-.', lw=2, label='NaOH (%)')
+        ax.plot(Cg[:frame*6]/Cg[0]*100, z_eval_anim[:frame], 'b-', lw=3, label='Gas CO₂ (%)')
+        ax.plot(Cl[:frame*6]/Cl.max()*100, z_eval_anim[:frame], 'r--', lw=2, label='Liquid CO₂ (%)')
+        ax.plot(NaOH[:frame*6]/NaOH[0]*100, z_eval_anim[:frame], 'g-.', lw=2, label='NaOH (%)')
         ax.set_xlim(0, 100)
         ax.set_ylim(0, H)
         ax.set_xlabel("Relative concentration (%)")
@@ -162,24 +155,6 @@ if run_animation:
         ax.grid(True)
         placeholder.pyplot(fig)
         plt.close(fig)
-
-    st.subheader("🎬 CSTR Train Conversion Animation")
-    placeholder_cstr = st.empty()
-    colors = ['b','r','g','m','c']
-    for frame in range(1, len(tspan), 4):
-        fig2, ax2 = plt.subplots(figsize=(8,5))
-        for i in range(N):
-            ax2.plot(tspan[:frame]/60, Na2CO3_hist[i][:frame], color=colors[i%5], lw=2, label=f'Na₂CO₃ CSTR {i+1}')
-            ax2.plot(tspan[:frame]/60, NaOH_hist[i][:frame], color=colors[i%5], lw=2, ls='--', label=f'NaOH CSTR {i+1}')
-        ax2.set_xlim(0, tspan[-1]/60)
-        ax2.set_ylim(0, max(max(Na2CO3_hist[0]), max(NaOH_hist[0]))*1.1)
-        ax2.set_xlabel("Time (min)")
-        ax2.set_ylabel("Molar flow (mol/s)")
-        ax2.set_title("CSTR Concentrations Over Time")
-        ax2.legend(ncol=2, fontsize=9)
-        ax2.grid(True)
-        placeholder_cstr.pyplot(fig2)
-        plt.close(fig2)
 
 # ===================== FINAL PLOTS =====================
 st.subheader("📊 Bubble Column Profiles")
