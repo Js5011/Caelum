@@ -90,42 +90,53 @@ for i in range(N):
     conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
 # ===================== COST CALCULATION (FIXED PRICING) =====================
-# ===================== REALISTIC COST CALCULATION =====================
-
-# Bare equipment cost
-absorber_cost = 12000 * (A * H)**0.6
-causticizer_cost = 15000 * V_total**0.6
-bare_CAPEX = absorber_cost + causticizer_cost
-
-# Installed CAPEX using realistic Lang factor for chemical plants
-LANG_FACTOR = 4.5  # higher than before for full installation + instrumentation
-CAPEX = bare_CAPEX * LANG_FACTOR
-
-# Pump electricity cost (assume realistic motor efficiency and annual operation)
-pump_power = (1.5e5 * L) / 0.65  # W, slightly lower efficiency
+# ===================== COST CALCULATION (FINAL, DEBUGGED) =====================
+ 
 SEC_PER_YEAR = 365 * 24 * 3600
-pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price  # $ per year
+capacity_factor = 0.85
 
-# Lime consumption and cost
-lime_ton = CaOH2_in * 74.1 / 1e6 * SEC_PER_YEAR  # convert mol/s to tons/year
-lime_cost = lime_ton * lime_price  # $/year
+# ---- Annual CO₂ captured ----
+CO2_mol_s = CO2_abs * capacity_factor
+CO2_tpy = CO2_mol_s * 44.01 / 1000 * SEC_PER_YEAR
 
-# Fixed O&M: labor, maintenance, instrumentation, downtime
-fixed_OM = 0.07 * CAPEX  # 7% of CAPEX/year
+# ---- Installed CAPEX ----
+absorber_cost = 18000 * (A * H)**0.62
+causticizer_cost = 22000 * V_total**0.6
 
-# CO₂ compression + monitoring
-CO2_tpy = CO2_abs * 44.01 / 1000 * SEC_PER_YEAR  # tons/year
-compression_cost = 30 * CO2_tpy   # $30/ton for compression, monitoring, transport
+bare_CAPEX = absorber_cost + causticizer_cost
+CAPEX = bare_CAPEX * 3.2 * 1.15   # Lang + owner’s cost
 
-# Total OPEX
+
+# ---- Pump electricity ----
+pump_eff = 0.7
+deltaP = 1.5e5
+pump_power = (deltaP * L) / pump_eff
+pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
+
+
+# ---- Lime cost (capacity-factor corrected) ----
+CaOH2_mol_s = CO2_mol_s
+CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000
+lime_cost = CaOH2_tpy * lime_price
+
+
+# ---- Fixed O&M ----
+fixed_OM = 0.045 * CAPEX
+
+
+# ---- Compression + MRV ----
+compression_cost = 25 * CO2_tpy
+
+
+# ---- Total costs ----
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
-
-# Annualized CAPEX (capital charge)
-annual_CAPEX = 0.1 * CAPEX  # 10% capital charge/year
+annual_CAPEX = 0.10 * CAPEX
 annual_cost = annual_CAPEX + OPEX
 
-# Cost per ton CO₂ (dynamic, realistic)
 cost_per_t = annual_cost / CO2_tpy
+
+
+
 
 
 # ===================== SUMMARY METRICS =====================
