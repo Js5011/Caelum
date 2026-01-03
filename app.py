@@ -3,7 +3,6 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
-import time
 
 st.set_page_config(page_title="CO₂ Capture Simulator", layout="wide")
 st.title("🏭 Industrial CO₂ Capture + Causticizing Simulator")
@@ -89,9 +88,7 @@ for i in range(N):
     CaOH2_hist.append(sol.y[2])
     conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
-# ===================== COST CALCULATION (FIXED PRICING) =====================
 # ===================== COST CALCULATION (FINAL, DEBUGGED) =====================
- 
 SEC_PER_YEAR = 365 * 24 * 3600
 capacity_factor = 0.85
 
@@ -102,10 +99,8 @@ CO2_tpy = CO2_mol_s * 44.01 / 1000 * SEC_PER_YEAR
 # ---- Installed CAPEX ----
 absorber_cost = 18000 * (A * H)**0.62
 causticizer_cost = 22000 * V_total**0.6
-
 bare_CAPEX = absorber_cost + causticizer_cost
 CAPEX = bare_CAPEX * 3.2 * 1.15   # Lang + owner’s cost
-
 
 # ---- Pump electricity ----
 pump_eff = 0.7
@@ -113,20 +108,16 @@ deltaP = 1.5e5
 pump_power = (deltaP * L) / pump_eff
 pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
 
-
-# ---- Lime cost (capacity-factor corrected) ----
+# ---- Lime cost ----
 CaOH2_mol_s = CO2_mol_s
 CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000
 lime_cost = CaOH2_tpy * lime_price
 
-
 # ---- Fixed O&M ----
 fixed_OM = 0.045 * CAPEX
 
-
 # ---- Compression + MRV ----
 compression_cost = 25 * CO2_tpy
-
 
 # ---- Total costs ----
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
@@ -135,33 +126,35 @@ annual_cost = annual_CAPEX + OPEX
 
 cost_per_t = annual_cost / CO2_tpy
 
-
-
 # ===================== SUMMARY METRICS =====================
 st.subheader("💨 Bubble Column Performance")
 st.metric("CO₂ Capture Efficiency (%)", f"{efficiency:.1f}")
 st.metric("CO₂ Captured Annually (t/year)", f"{CO2_tpy:,.0f}")
-st.metric("Total CAPEX ($)", f"{(CAPEX*1.5):,.0f}")
-st.metric("Annual OPEX ($/year)", f"{OPEX*11:,.0f}")
+st.metric("Total CAPEX ($)", f"{CAPEX:,.0f}")
+st.metric("Annual OPEX ($/year)", f"{OPEX:,.0f}")
 st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t:,.0f}")
+
+# ===================== ANIMATION OPTION =====================
+run_animation = st.checkbox("▶ Run animations (slower)")
+
 # ===================== BUBBLE COLUMN ANIMATION =====================
-st.subheader("🎬 Bubble Column Animation")
-placeholder = st.empty()
-for frame in range(1, len(z_eval)):
-    fig, ax = plt.subplots(figsize=(7,5))
-    ax.plot(Cg[:frame]/Cg0*100, z_eval[:frame], 'b-', lw=3, label='Gas CO₂ (%)')
-    ax.plot(Cl[:frame]/Cl.max()*100, z_eval[:frame], 'r--', lw=2, label='Liquid CO₂ (%)')
-    ax.plot(NaOH[:frame]/C_NaOH0*100, z_eval[:frame], 'g-.', lw=2, label='NaOH (%)')
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, H)
-    ax.set_xlabel("Relative concentration (%)")
-    ax.set_ylabel("Column height (m)")
-    ax.set_title("Bubble Column Dynamics")
-    ax.legend()
-    ax.grid(True)
-    placeholder.pyplot(fig)
-    plt.close(fig)
-    time.sleep(0.01)
+if run_animation:
+    st.subheader("🎬 Bubble Column Animation")
+    placeholder = st.empty()
+    for frame in range(1, len(z_eval), 3):
+        fig, ax = plt.subplots(figsize=(7,5))
+        ax.plot(Cg[:frame]/Cg0*100, z_eval[:frame], 'b-', lw=3, label='Gas CO₂ (%)')
+        ax.plot(Cl[:frame]/Cl.max()*100, z_eval[:frame], 'r--', lw=2, label='Liquid CO₂ (%)')
+        ax.plot(NaOH[:frame]/C_NaOH0*100, z_eval[:frame], 'g-.', lw=2, label='NaOH (%)')
+        ax.set_xlim(0, 100)
+        ax.set_ylim(0, H)
+        ax.set_xlabel("Relative concentration (%)")
+        ax.set_ylabel("Column height (m)")
+        ax.set_title("Bubble Column Dynamics")
+        ax.legend()
+        ax.grid(True)
+        placeholder.pyplot(fig)
+        plt.close(fig)
 
 # ===================== EXTRA GRAPHS =====================
 st.subheader("📊 Bubble Column Profiles")
@@ -176,7 +169,6 @@ ax3.legend()
 ax3.grid(True)
 st.pyplot(fig3)
 
-# Cumulative CO₂ captured along column
 cumulative_CO2 = G*(Cg0 - Cg)
 fig4, ax4 = plt.subplots(figsize=(7,5))
 ax4.plot(cumulative_CO2, z_eval, 'm-', lw=3)
@@ -187,24 +179,24 @@ ax4.grid(True)
 st.pyplot(fig4)
 
 # ===================== CSTR TRAIN ANIMATION =====================
-st.subheader("🎬 CSTR Train Conversion Animation")
-placeholder_cstr = st.empty()
-for frame in range(1, len(tspan)):
-    fig2, ax2 = plt.subplots(figsize=(8,5))
-    colors = ['b','r','g','m','c']
-    for i in range(N):
-        ax2.plot(tspan[:frame]/60, Na2CO3_hist[i][:frame], color=colors[i%5], lw=2, label=f'Na₂CO₃ CSTR {i+1}')
-        ax2.plot(tspan[:frame]/60, NaOH_hist[i][:frame], color=colors[i%5], lw=2, ls='--', label=f'NaOH CSTR {i+1}')
-    ax2.set_xlim(0, tspan[-1]/60)
-    ax2.set_ylim(0, max(CaOH2_in,Na2CO3_hist[0].max())*1.1)
-    ax2.set_xlabel("Time (min)")
-    ax2.set_ylabel("Molar flow (mol/s)")
-    ax2.set_title("CSTR Concentrations Over Time")
-    ax2.legend(ncol=2, fontsize=9)
-    ax2.grid(True)
-    placeholder_cstr.pyplot(fig2)
-    plt.close(fig2)
-    time.sleep(0.01)
+if run_animation:
+    st.subheader("🎬 CSTR Train Conversion Animation")
+    placeholder_cstr = st.empty()
+    for frame in range(1, len(tspan), 4):
+        fig2, ax2 = plt.subplots(figsize=(8,5))
+        colors = ['b','r','g','m','c']
+        for i in range(N):
+            ax2.plot(tspan[:frame]/60, Na2CO3_hist[i][:frame], color=colors[i%5], lw=2, label=f'Na₂CO₃ CSTR {i+1}')
+            ax2.plot(tspan[:frame]/60, NaOH_hist[i][:frame], color=colors[i%5], lw=2, ls='--', label=f'NaOH CSTR {i+1}')
+        ax2.set_xlim(0, tspan[-1]/60)
+        ax2.set_ylim(0, max(CaOH2_in,Na2CO3_hist[0].max())*1.1)
+        ax2.set_xlabel("Time (min)")
+        ax2.set_ylabel("Molar flow (mol/s)")
+        ax2.set_title("CSTR Concentrations Over Time")
+        ax2.legend(ncol=2, fontsize=9)
+        ax2.grid(True)
+        placeholder_cstr.pyplot(fig2)
+        plt.close(fig2)
 
 # ===================== CSTR SUMMARY GRAPHS =====================
 st.subheader("📊 CSTR Conversion and Product Formation")
