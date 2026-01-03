@@ -119,7 +119,8 @@ if st.button("Run Simulation"):
     pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
 
     # Lime cost (FIXED)
-    CaOH2_tpy = CO2_mol_s * 44.01 / 1000 * SEC_PER_YEAR  # tons/year
+    CaOH2_MW = 74.09  # g/mol
+    CaOH2_tpy = CO2_mol_s * CaOH2_MW / 1000 * SEC_PER_YEAR
     lime_cost = CaOH2_tpy * lime_price
 
     # O&M and compression
