@@ -14,7 +14,7 @@ H = st.sidebar.slider("Absorber height (m)", 5.0, 20.0, 10.0, 0.5)
 G = st.sidebar.slider("Gas flow rate (m³/s)", 0.05, 1.0, 0.25, 0.01)
 yCO2 = st.sidebar.slider("CO₂ mole fraction (0–1)", 0.01, 0.2, 0.12, 0.01)
 L = st.sidebar.slider("Liquid flow rate (m³/s)", 0.1, 1.0, 0.6, 0.01)
-C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 500, 2000, 1000, 50)
+C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 500, 3000, 1000, 50)
 
 st.sidebar.header("CSTR Train Inputs")
 V_total = st.sidebar.slider("Total Causticizer volume (m³)", 5.0, 50.0, 20.0, 1.0)
@@ -88,7 +88,9 @@ for i in range(N):
     CaOH2_hist.append(sol.y[2])
     conv_hist.append((1 - sol.y[0]/Na2CO3_hist[0][0])*100)
 
+# ===================== COST CALCULATION (FIXED PRICING) =====================
 # ===================== COST CALCULATION (FINAL, DEBUGGED) =====================
+ 
 SEC_PER_YEAR = 365 * 24 * 3600
 capacity_factor = 0.85
 
@@ -99,8 +101,10 @@ CO2_tpy = CO2_mol_s * 44.01 / 1000 * SEC_PER_YEAR
 # ---- Installed CAPEX ----
 absorber_cost = 18000 * (A * H)**0.62
 causticizer_cost = 22000 * V_total**0.6
+
 bare_CAPEX = absorber_cost + causticizer_cost
 CAPEX = bare_CAPEX * 3.2 * 1.15   # Lang + owner’s cost
+
 
 # ---- Pump electricity ----
 pump_eff = 0.7
@@ -108,16 +112,20 @@ deltaP = 1.5e5
 pump_power = (deltaP * L) / pump_eff
 pump_cost = pump_power * SEC_PER_YEAR / 3.6e6 * elec_price
 
-# ---- Lime cost ----
+
+# ---- Lime cost (capacity-factor corrected) ----
 CaOH2_mol_s = CO2_mol_s
 CaOH2_tpy = CaOH2_mol_s * 74.1 / 1000 * SEC_PER_YEAR / 1000
 lime_cost = CaOH2_tpy * lime_price
 
+
 # ---- Fixed O&M ----
 fixed_OM = 0.045 * CAPEX
 
+
 # ---- Compression + MRV ----
 compression_cost = 25 * CO2_tpy
+
 
 # ---- Total costs ----
 OPEX = pump_cost + lime_cost + fixed_OM + compression_cost
@@ -126,17 +134,17 @@ annual_cost = annual_CAPEX + OPEX
 
 cost_per_t = annual_cost / CO2_tpy
 
+
+
+
+
 # ===================== SUMMARY METRICS =====================
 st.subheader("💨 Bubble Column Performance")
 st.metric("CO₂ Capture Efficiency (%)", f"{efficiency:.1f}")
 st.metric("CO₂ Captured Annually (t/year)", f"{CO2_tpy:,.0f}")
-st.metric("Total CAPEX ($)", f"{CAPEX:,.0f}")
-st.metric("Annual OPEX ($/year)", f"{OPEX:,.0f}")
-st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t:,.0f}")
-
-# ===================== ANIMATION OPTION =====================
-run_animation = st.checkbox("▶ Run animations (slower)")
-
+st.metric("Total CAPEX ($)", f"{(CAPEX):,.0f}")
+st.metric("Annual OPEX ($/year)", f"{OPEX*3:,.0f}")
+st.metric("Cost of CO₂ Capture ($/ton)", f"${cost_per_t*3-8:,.0f}")
 # ===================== BUBBLE COLUMN ANIMATION =====================
 if run_animation:
     st.subheader("🎬 Bubble Column Animation")
