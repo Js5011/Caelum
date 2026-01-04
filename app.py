@@ -93,6 +93,10 @@ def run_model(
     Cg_out = max(Cg_abs[-1], 0.0)
 
     CO2_abs_mol_s = max(G * (Cg0 - Cg_out), 0.0)
+    # Additional absorber diagnostics
+    driving_force = (Cg_abs * R * T / H_CO2) - Cl_abs
+    reaction_rate = k_rxn * Cl_abs * (NaOH_abs / (NaOH_abs + 1000))
+
     efficiency = min(100 * CO2_abs_mol_s / (G * Cg0), 100)
 
     # ---------- CSTR Train ----------
@@ -100,7 +104,7 @@ def run_model(
     tau = V / L
     t = np.linspace(0, 4 * tau, 200)
 
-    Na2CO3_in = CO2_abs_mol_s
+    Na2CO3_in = CO2_abs_mol_s  # mol/s entering CSTR 1 (series flow)
     NaOH_in = 0.0
     CaOH2_in = 1.05 * Na2CO3_in
 
@@ -129,7 +133,8 @@ def run_model(
     return (
         z, Cg_abs, Cl_abs, NaOH_abs,
         CO2_abs_mol_s, efficiency,
-        t, Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist
+        t, Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist,
+        driving_force, reaction_rate
     )
 
 # ==========================================================
@@ -139,11 +144,13 @@ if st.button("▶ Run Simulation"):
     (
         z, Cg_abs, Cl_abs, NaOH_abs,
         CO2_abs_mol_s, efficiency,
-        t, Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist
+        t, Na2CO3_hist, NaOH_hist, CaOH2_hist, conv_hist,
+        driving_force, reaction_rate
     ) = run_model(
         D, H, G, L, yCO2, C_NaOH0,
         V_total, N, k_caus, eta_eq
     )
+
 
     # ---------- Annual CO₂ ----------
     SEC_PER_YEAR = 365 * 24 * 3600
@@ -197,6 +204,33 @@ if st.button("▶ Run Simulation"):
     ax1.grid(True)
     st.pyplot(fig1)
 
+    st.subheader("📈 Additional Absorber Diagnostics")
+
+    # ---- CO₂ Driving Force ----
+    fig3, ax3 = plt.subplots()
+    ax3.plot(driving_force, z)
+    ax3.set_xlabel("CO₂ Driving Force (mol/m³)")
+    ax3.set_ylabel("Column Height (m)")
+    ax3.grid(True)
+    st.pyplot(fig3)
+
+    # ---- Liquid CO₂ Concentration ----
+    fig4, ax4 = plt.subplots()
+    ax4.plot(Cl_abs, z)
+    ax4.set_xlabel("Dissolved CO₂ (mol/m³)")
+    ax4.set_ylabel("Column Height (m)")
+    ax4.grid(True)
+    st.pyplot(fig4)
+
+    # ---- NaOH Consumption Rate ----
+    fig5, ax5 = plt.subplots()
+    ax5.plot(reaction_rate, z)
+    ax5.set_xlabel("Reaction Rate (mol/m³·s)")
+    ax5.set_ylabel("Column Height (m)")
+    ax5.grid(True)
+    st.pyplot(fig5)
+
+
     # ==========================================================
     # PLOTS – CSTRs
     # ==========================================================
@@ -210,3 +244,15 @@ if st.button("▶ Run Simulation"):
     ax2.legend()
     ax2.grid(True)
     st.pyplot(fig2)
+    st.subheader("📉 Carbon Flow Through CSTR Series")
+
+    fig6, ax6 = plt.subplots()
+    for i in range(N):
+        ax6.plot(t / 60, Na2CO3_hist[i], label=f"CSTR {i+1}")
+
+    ax6.set_xlabel("Time (min)")
+    ax6.set_ylabel("Na₂CO₃ Flow (mol/s)")
+    ax6.legend()
+    ax6.grid(True)
+    st.pyplot(fig6)
+
