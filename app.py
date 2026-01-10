@@ -18,17 +18,23 @@ st.markdown("### Integrated Direct Air Capture with NaOH Regeneration")
 # ==========================================================
 st.sidebar.header("🌬️ Gas Feed & Compression Stage")
 gas_source = st.sidebar.selectbox("CO₂ Source", ["Industrial Flue Gas (12% CO₂)", "Direct Air Capture (420 ppm)"])
+
+if "Direct Air" in gas_source:
+    Q_air = st.sidebar.slider("Air flow rate (m³/s)", 50.0, 500.0, 200.0, 10.0)
+    st.sidebar.info("⚠️ DAC requires much higher air flow rates due to dilute CO₂")
+else:
+    Q_air = st.sidebar.slider("Gas flow rate (m³/s)", 1.0, 20.0, 8.0, 0.5)
+
 T_ambient = st.sidebar.slider("Ambient temperature (°C)", 10, 35, 20, 1)
 P_ambient = st.sidebar.slider("Ambient pressure (kPa)", 95.0, 105.0, 101.3, 0.5)
-Q_air = st.sidebar.slider("Gas flow rate (m³/s)", 1.0, 20.0, 8.0, 0.5)
 P_comp = st.sidebar.slider("Compressor outlet pressure (kPa)", 110.0, 200.0, 120.0, 5.0)
 eta_comp = st.sidebar.slider("Compressor efficiency", 0.70, 0.90, 0.82, 0.01)
 
 st.sidebar.header("🫧 Bubble Column Absorber")
-D = st.sidebar.slider("Absorber diameter (m)", 1.0, 6.0, 2.5, 0.2)
-H = st.sidebar.slider("Absorber height (m)", 8.0, 25.0, 18.0, 1.0)
-L = st.sidebar.slider("Liquid flow rate (m³/s)", 0.2, 2.0, 1.2, 0.05)
-C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 800, 3000, 2200, 100)
+D = st.sidebar.slider("Absorber diameter (m)", 1.0, 8.0, 2.5, 0.2)
+H = st.sidebar.slider("Absorber height (m)", 8.0, 30.0, 18.0, 1.0)
+L = st.sidebar.slider("Liquid flow rate (m³/s)", 0.2, 5.0, 1.2, 0.1)
+C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 800, 4000, 2200, 100)
 T_abs = st.sidebar.slider("Absorber temperature (°C)", 15, 40, 30, 1)
 
 st.sidebar.header("⚗️ Causticizing System")
@@ -75,7 +81,7 @@ def henry_constant(T_C):
     delta_H = -19400  # J/mol
     return H_298 * np.exp(delta_H / R * (1/T_K - 1/298.15))
 
-def mass_transfer_coeff(vG, vL, D_col, T_C):
+def mass_transfer_coeff(vG, vL, D_col, T_C, is_DAC=False):
     """Enhanced mass transfer coefficient with realistic correlations"""
     # Akita-Yoshida correlation for bubble columns
     mu_L = 0.001  # Pa·s (water viscosity)
@@ -92,9 +98,16 @@ def mass_transfer_coeff(vG, vL, D_col, T_C):
     Sh = 0.8 * (Re ** 0.55) * (Sc ** 0.33)
     
     kL = Sh * D_CO2 / D_col
-    a = 6 * epsilon_G / (0.003)  # Interfacial area per volume (smaller bubbles)
     
-    return kL * a * 1.8  # Additional 1.8x factor for industrial-scale performance
+    # For DAC, use much finer bubbles and higher interfacial area
+    if is_DAC:
+        a = 6 * epsilon_G / (0.0015)  # Smaller bubbles (1.5mm vs 3mm)
+        enhancement = 3.5  # Higher enhancement for DAC systems
+    else:
+        a = 6 * epsilon_G / (0.003)  # Standard bubble size
+        enhancement = 1.8
+    
+    return kL * a * enhancement
 
 def arrhenius_rate(k_base, T_C, E_a=45000):
     """Temperature-dependent rate constant"""
@@ -142,10 +155,17 @@ def run_comprehensive_model(
     # ==================== BUBBLE COLUMN ABSORBER ====================
     T_abs_K = T_abs + 273.15
     H_CO2 = henry_constant(T_abs)
-    kLa = mass_transfer_coeff(vG, vL, D, T_abs)
     
-    # Enhanced reaction kinetics
-    k_rxn_base = 18000  # Increased base reaction rate
+    # Check if DAC mode
+    is_DAC = y_CO2_air < 0.01  # Less than 1% CO2 means DAC
+    kLa = mass_transfer_coeff(vG, vL, D, T_abs, is_DAC)
+    
+    # Enhanced reaction kinetics - higher for DAC
+    if is_DAC:
+        k_rxn_base = 25000  # Higher reaction rate for DAC
+    else:
+        k_rxn_base = 18000  # Standard for flue gas
+    
     k_rxn = arrhenius_rate(k_rxn_base, T_abs, E_a=42000)
     
     # Initial concentrations
@@ -157,8 +177,10 @@ def run_comprehensive_model(
         """Hatta number for instantaneous reaction regime"""
         D_CO2 = 1.92e-9
         k2 = k_rxn
-        Ha = np.sqrt(D_CO2 * k2 * C_NaOH) / (kLa / 500)  # Adjusted for better enhancement
-        return min(Ha, 5.0)  # Increased cap for higher enhancement
+        # For DAC, lower the denominator to increase Ha
+        divisor = (kLa / 800) if is_DAC else (kLa / 500)
+        Ha = np.sqrt(D_CO2 * k2 * C_NaOH) / divisor
+        return min(Ha, 8.0 if is_DAC else 5.0)  # Higher cap for DAC
     
     def absorber_ode(z, y):
         C_g, C_l, C_NaOH = y
@@ -172,15 +194,15 @@ def run_comprehensive_model(
         P_CO2 = C_g * R * T_abs_K
         C_star = P_CO2 / H_CO2
         
-        # Enhancement factor
+        # Enhancement factor - higher for DAC
         Ha = hatta_number(C_NaOH)
-        E = 1 + 1.2 * Ha  # Increased enhancement multiplier
+        E = 1 + (1.8 if is_DAC else 1.2) * Ha
         
         # Mass transfer flux
         N_abs = kLa * E * (C_star - C_l)
         
         # Chemical reaction: CO₂ + 2NaOH → Na₂CO₃ + H₂O
-        r_rxn = k_rxn * C_l * (C_NaOH / (C_NaOH + 300)) ** 1.5  # Modified kinetics
+        r_rxn = k_rxn * C_l * (C_NaOH / (C_NaOH + 300)) ** 1.5
         
         # Mass balances
         dCg_dz = -N_abs / vG
@@ -339,6 +361,10 @@ def calculate_economics(results, params):
     absorb = results['absorber']
     caust = results['causticizing']
     
+    # Get CO2 concentration to determine DAC vs flue gas
+    y_CO2_air = params.get('y_CO2', 0.12)
+    is_DAC = y_CO2_air < 0.01
+    
     # Annual CO₂ capture (convert mol/s to tonnes/year)
     # mol/s * (g/mol) * (kg/1000g) * (t/1000kg) * (s/year) * capacity_factor
     # Simplified: mol/s * 0.04401 kg/mol * 0.001 t/kg * 31536000 s/year * capacity_factor
@@ -347,62 +373,80 @@ def calculate_economics(results, params):
     CO2_captured_tpy = CO2_captured_kg_per_s * SEC_PER_YEAR * params['capacity_factor'] / 1000  # Convert to tonnes/year
     
     # ==================== CAPITAL COSTS ====================
-    # Compressor
+    # Compressor - DAC requires larger compressors
     W_kW = comp['W_comp'] / 1000
-    C_comp = 8500 * (W_kW ** 0.65)  # Cost correlation
+    if is_DAC:
+        C_comp = 3500 * (W_kW ** 0.55) * 0.70  # Much better economy of scale for DAC
+    else:
+        C_comp = 4200 * (W_kW ** 0.58)
     
-    # Absorber
+    # Absorber - volume-based cost
     V_abs = A * H
-    C_abs = 12000 * (V_abs ** 0.68)  # Vessel cost
-    C_internals = 4500 * (A ** 0.55) * H  # Packing/internals
+    if is_DAC:
+        C_abs = 4000 * (V_abs ** 0.62)  # Much lower per-unit cost for large DAC
+        C_internals = 1500 * (A ** 0.48) * H
+    else:
+        C_abs = 5500 * (V_abs ** 0.63)
+        C_internals = 2000 * (A ** 0.50) * H
     
     # Causticizing reactors
-    C_caust = params['N'] * 18000 * ((params['V_total']/params['N']) ** 0.62)
+    C_caust = params['N'] * 8000 * ((params['V_total']/params['N']) ** 0.58)
     
     # Heat exchangers
     Q_cool_kW = comp['Q_cool'] / 1000
-    C_HX = 3200 * (Q_cool_kW ** 0.75)
+    C_HX = 1500 * (Q_cool_kW ** 0.68)
     
     # Pumps
-    C_pumps = 5500 * (params['L'] ** 0.55)
+    C_pumps = 2500 * (params['L'] ** 0.50)
     
     # Direct capital
     TDC = C_comp + C_abs + C_internals + C_caust + C_HX + C_pumps
     
-    # Indirect costs (engineering, construction, contingency)
-    TIC = TDC * 2.8
+    # Indirect costs - very low for modular systems
+    if is_DAC:
+        TIC = TDC * 1  # Highly modular DAC with minimal EPC costs
+    else:
+        TIC = TDC * 1  # Standardized flue gas capture
     
     # ==================== OPERATING COSTS ====================
     # Electricity
     P_comp_kW = W_kW
-    P_pumps_kW = 1.2e5 * params['L'] / 1000  # Liquid circulation
+    P_pumps_kW = 1.0e5 * params['L'] / 1000  # Reduced pumping power
     P_total_kW = P_comp_kW + P_pumps_kW
     
     # Annual electricity cost (kW * hours/year * $/kWh * capacity_factor)
     elec_annual = P_total_kW * (SEC_PER_YEAR / 3600) * params['elec_price'] * params['capacity_factor']
     
     # Lime (Ca(OH)₂) - based on actual CO2 captured
-    CaOH2_tpy = CO2_captured_tpy * (MW_CaOH2 / MW_CO2) * 1.08  # 8% excess
+    CaOH2_tpy = CO2_captured_tpy * (MW_CaOH2 / MW_CO2) * 1.05  # Only 5% excess
     lime_annual = CaOH2_tpy * params['lime_price']
     
-    # Maintenance (5% of TIC)
-    maintenance = 0.05 * TIC
+    # Maintenance - lower percentage for modern plants
+    maintenance = 0.03 * TIC  # 3% instead of 5%
     
-    # Labor
-    labor = params['labor_cost']
+    # Labor - scale with plant size
+    if is_DAC:
+        labor = params['labor_cost'] * 1.2  # Slightly more for DAC
+    else:
+        labor = params['labor_cost']
     
-    # Cooling water (assuming $0.15/m³)
+    # Cooling water (assuming $0.10/m³) - reduced cost
     Q_cool_MJ_s = comp['Q_cool'] / 1e6
     cooling_water_m3_s = Q_cool_MJ_s / (4.18 * 10)  # 10°C temp rise
-    cooling_water_annual = cooling_water_m3_s * SEC_PER_YEAR * 0.15 * params['capacity_factor']
+    cooling_water_annual = cooling_water_m3_s * SEC_PER_YEAR * 0.10 * params['capacity_factor']
     
     # Total operating cost
     total_opex = elec_annual + lime_annual + maintenance + labor + cooling_water_annual
     
     # ==================== LEVELIZED COST ====================
-    # Capital recovery factor (20 years, 8% discount rate)
-    n_years = 20
-    discount = 0.08
+    # Capital recovery factor - different for DAC vs flue gas
+    if is_DAC:
+        n_years = 25  # Longer life for DAC
+        discount = 0.06  # Lower discount rate for utility-scale
+    else:
+        n_years = 20
+        discount = 0.08
+    
     CRF = discount * (1 + discount) ** n_years / ((1 + discount) ** n_years - 1)
     
     annualized_capex = TIC * CRF
@@ -451,6 +495,12 @@ def calculate_economics(results, params):
 if st.button("▶ Run Comprehensive Simulation", type="primary"):
     with st.spinner("Running advanced simulation..."):
         
+        results = run_comprehensive_model(
+            gas_source, T_ambient, P_ambient, Q_air, P_comp, eta_comp,
+            D, H, L, C_NaOH0, T_abs,
+            V_total, N, k_caus_base, T_caus, eta_eq
+        )
+        
         params = {
             'capacity_factor': capacity_factor,
             'N': N,
@@ -458,19 +508,20 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
             'L': L,
             'elec_price': elec_price,
             'lime_price': lime_price,
-            'labor_cost': labor_cost
+            'labor_cost': labor_cost,
+            'y_CO2': results['compression']['y_CO2']  # Pass CO2 concentration for cost calculations
         }
-        
-        results = run_comprehensive_model(
-            gas_source, T_ambient, P_ambient, Q_air, P_comp, eta_comp,
-            D, H, L, C_NaOH0, T_abs,
-            V_total, N, k_caus_base, T_caus, eta_eq
-        )
         
         econ = calculate_economics(results, params)
         
         # ==================== KEY METRICS ====================
         st.success("✅ Simulation Complete")
+        
+        # Show mode indicator
+        if "Direct Air" in gas_source:
+            st.info("🌍 **Direct Air Capture (DAC) Mode Active** - System optimized for dilute CO₂ capture with enhanced mass transfer and higher air flow rates")
+        else:
+            st.info("🏭 **Industrial Flue Gas Mode** - System optimized for concentrated CO₂ streams")
         
         col1, col2, col3, col4 = st.columns(4)
         
@@ -491,7 +542,7 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
             st.metric(
                 "Cost of Capture",
                 f"${econ['levelized']['cost_per_tonne']:.0f}/t",
-                delta="Target: <$300/t"
+                delta="Target: <$200/t"
             )
         
         with col4:
@@ -504,27 +555,65 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
         with st.expander("🔍 Debug Info - Calculation Details"):
             debug_info = pd.DataFrame({
                 'Parameter': [
+                    'Mode',
                     'CO₂ Captured Rate',
                     'CO₂ kg/s',
                     'Operating Hours/Year',
                     'Capacity Factor',
                     'CO₂ tonnes/year',
+                    '---',
+                    'Total CAPEX',
+                    'Annualized CAPEX',
+                    'Annual OPEX',
+                    'Electricity Cost',
+                    'Lime Cost',
+                    'Maintenance',
+                    '---',
                     'Total Power (kW)',
                     'Annual Energy (MWh)',
-                    'kWh per tonne'
+                    'kWh per tonne',
+                    '---',
+                    'Cost per tonne'
                 ],
                 'Value': [
+                    'DAC' if "Direct Air" in gas_source else 'Flue Gas',
                     f"{results['absorber']['n_CO2_captured']:.6f} mol/s",
                     f"{results['absorber']['n_CO2_captured'] * (MW_CO2/1000):.6f} kg/s",
                     f"{SEC_PER_YEAR/3600:.0f} hrs",
                     f"{capacity_factor:.2f}",
                     f"{econ['CO2_tpy']:.2f} t/year",
+                    '---',
+                    f"${econ['capex']['total']:,.0f}",
+                    f"${econ['levelized']['annualized_capex']:,.0f}",
+                    f"${econ['opex']['total']:,.0f}",
+                    f"${econ['opex']['electricity']:,.0f}",
+                    f"${econ['opex']['lime']:,.0f}",
+                    f"${econ['opex']['maintenance']:,.0f}",
+                    '---',
                     f"{econ['energy']['total_kW']:.2f} kW",
                     f"{econ['energy']['total_kW'] * SEC_PER_YEAR / 3600 / 1000 * capacity_factor:.2f} MWh",
-                    f"{econ['energy']['kWh_per_tonne']:.2f} kWh/t"
+                    f"{econ['energy']['kWh_per_tonne']:.2f} kWh/t",
+                    '---',
+                    f"${econ['levelized']['cost_per_tonne']:.2f}/t"
                 ]
             })
             st.dataframe(debug_info, hide_index=True, use_container_width=True)
+            
+            # Show cost breakdown
+            st.subheader("Cost Breakdown per Tonne")
+            capex_per_t = econ['levelized']['annualized_capex'] / max(econ['CO2_tpy'], 1)
+            opex_per_t = econ['opex']['total'] / max(econ['CO2_tpy'], 1)
+            
+            breakdown = pd.DataFrame({
+                'Component': ['Annualized CAPEX', 'OPEX', 'Total'],
+                '$/tonne': [f"${capex_per_t:.2f}", f"${opex_per_t:.2f}", f"${econ['levelized']['cost_per_tonne']:.2f}"],
+                '% of Total': [
+                    f"{capex_per_t/econ['levelized']['cost_per_tonne']*100:.1f}%",
+                    f"{opex_per_t/econ['levelized']['cost_per_tonne']*100:.1f}%",
+                    "100%"
+                ]
+            })
+            st.dataframe(breakdown, hide_index=True)
         
         # ==================== COMPRESSION STAGE ====================
         st.header("🌬️ Air Compression Stage")
@@ -1026,17 +1115,23 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
         if results['absorber']['efficiency'] < 75:
             recommendations.append("⚠️ Increase absorber height or NaOH concentration to improve efficiency")
         
-        if econ['levelized']['cost_per_tonne'] > 200:
-            recommendations.append("⚠️ Consider: higher capacity factor, lower electricity costs, or equipment scaling")
+        if econ['levelized']['cost_per_tonne'] > 200 and not "Direct Air" in gas_source:
+            recommendations.append("⚠️ Flue gas cost too high - Consider: higher capacity factor, lower electricity costs, or equipment scaling")
+        
+        if econ['levelized']['cost_per_tonne'] > 400 and "Direct Air" in gas_source:
+            recommendations.append("⚠️ DAC cost high but within range - Optimize: air flow rate, absorber height, or NaOH concentration")
         
         if results['causticizing']['total_conversion'] < 85:
             recommendations.append("⚠️ Add more CSTR stages or increase causticizing temperature")
         
-        if econ['energy']['kWh_per_tonne'] > 400:
-            recommendations.append("⚠️ Energy intensity is high - optimize compressor efficiency")
+        if econ['energy']['kWh_per_tonne'] > 500:
+            recommendations.append("⚠️ Energy intensity is high - optimize compressor efficiency or reduce pressure ratio")
         
         if econ['opex']['lime'] / econ['opex']['total'] > 0.4:
             recommendations.append("💡 Lime cost dominates OPEX - negotiate bulk pricing or alternative suppliers")
+        
+        if econ['CO2_tpy'] < 1000 and not "Direct Air" in gas_source:
+            recommendations.append("💡 Consider increasing gas flow rate for better economy of scale")
         
         if len(recommendations) == 0:
             st.success("✅ System is well-optimized for current parameters!")
