@@ -542,7 +542,7 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
             st.metric(
                 "Cost of Capture",
                 f"${econ['levelized']['cost_per_tonne']:.0f}/t",
-                delta="Target: <$200/t"
+                delta="Target: <$450/t"
             )
         
         with col4:
