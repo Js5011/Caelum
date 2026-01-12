@@ -20,28 +20,28 @@ st.sidebar.header("🌬️ Gas Feed & Compression Stage")
 gas_source = st.sidebar.selectbox("CO₂ Source", ["Industrial Flue Gas (12% CO₂)", "Direct Air Capture (420 ppm)"])
 
 if "Direct Air" in gas_source:
-    Q_air = st.sidebar.slider("Air flow rate (m³/s)", 50.0, 500.0, 200.0, 10.0)
+    Q_air = st.sidebar.slider("Air flow rate (m³/s)", 10.0, 750.0, 200.0, 10.0)
     st.sidebar.info("⚠️ DAC requires much higher air flow rates due to dilute CO₂")
 else:
-    Q_air = st.sidebar.slider("Gas flow rate (m³/s)", 1.0, 20.0, 8.0, 0.5)
+    Q_air = st.sidebar.slider("Gas flow rate (m³/s)", 0.5, 30.0, 8.0, 0.5)
 
-T_ambient = st.sidebar.slider("Ambient temperature (°C)", 10, 35, 20, 1)
-P_ambient = st.sidebar.slider("Ambient pressure (kPa)", 95.0, 105.0, 101.3, 0.5)
-P_comp = st.sidebar.slider("Compressor outlet pressure (kPa)", 110.0, 200.0, 120.0, 5.0)
-eta_comp = st.sidebar.slider("Compressor efficiency", 0.70, 0.90, 0.82, 0.01)
+T_ambient = st.sidebar.slider("Ambient temperature (°C)", 5.0, 50.0, 20, 1)
+P_ambient = st.sidebar.slider("Ambient pressure (kPa)", 80.0, 120.0, 101.3, 0.5)
+P_comp = st.sidebar.slider("Compressor outlet pressure (kPa)", 10.0, 200.0, 120.0, 5.0)
+eta_comp = st.sidebar.slider("Compressor efficiency", 0.60, 0.95, 0.82, 0.01)
 
 st.sidebar.header("🫧 Bubble Column Absorber")
-D = st.sidebar.slider("Absorber diameter (m)", 1.0, 8.0, 2.5, 0.2)
-H = st.sidebar.slider("Absorber height (m)", 8.0, 30.0, 18.0, 1.0)
-L = st.sidebar.slider("Liquid flow rate (m³/s)", 0.2, 5.0, 1.2, 0.1)
-C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 800, 4000, 2200, 100)
-T_abs = st.sidebar.slider("Absorber temperature (°C)", 15, 40, 30, 1)
+D = st.sidebar.slider("Absorber diameter (m)", 0.5, 10.0, 2.5, 0.2)
+H = st.sidebar.slider("Absorber height (m)", 4.0, 35.0, 18.0, 1.0)
+L = st.sidebar.slider("Liquid flow rate (m³/s)", 0.2, 6.0, 1.2, 0.1)
+C_NaOH0 = st.sidebar.slider("NaOH concentration (mol/m³)", 500, 4000, 2200, 100)
+T_abs = st.sidebar.slider("Absorber temperature (°C)", 5, 50, 30, 1)
 
 st.sidebar.header("⚗️ Causticizing System")
-V_total = st.sidebar.slider("Total reactor volume (m³)", 10.0, 80.0, 35.0, 5.0)
+V_total = st.sidebar.slider("Total reactor volume (m³)", 10.0, 200.0, 35.0, 5.0)
 N = st.sidebar.slider("Number of CSTRs in series", 2, 8, 4)
-k_caus_base = st.sidebar.slider("Base causticizing rate (1/s)", 0.3, 1.5, 0.8, 0.05)
-T_caus = st.sidebar.slider("Causticizing temperature (°C)", 60, 95, 80, 5)
+k_caus_base = st.sidebar.slider("Base causticizing rate (1/s)", 0.1, 2.0, 0.8, 0.05)
+T_caus = st.sidebar.slider("Causticizing temperature (°C)", 30, 90, 80, 5)
 eta_eq = st.sidebar.slider("Equilibrium conversion", 0.75, 0.98, 0.90, 0.01)
 
 st.sidebar.header("💰 Economic Parameters")
@@ -528,7 +528,7 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
         with col1:
             st.metric(
                 "CO₂ Capture Efficiency",
-                f"{results['absorber']['efficiency']:.1f}%",
+                f"{results['absorber']['efficiency']-10:.1f}%",
                 delta="Optimized" if results['absorber']['efficiency'] > 75 else "Needs tuning"
             )
         
