@@ -25,7 +25,7 @@ if "Direct Air" in gas_source:
 else:
     Q_air = st.sidebar.slider("Gas flow rate (m³/s)", 0.5, 30.0, 8.0, 0.5)
 
-T_ambient = st.sidebar.slider("Ambient temperature (°C)", 5.0, 50.0, 20, 1)
+T_ambient = st.sidebar.slider("Ambient temperature (°C)", 5.0, 50.0, 20, 1.0)
 P_ambient = st.sidebar.slider("Ambient pressure (kPa)", 80.0, 120.0, 101.3, 0.5)
 P_comp = st.sidebar.slider("Compressor outlet pressure (kPa)", 10.0, 200.0, 120.0, 5.0)
 eta_comp = st.sidebar.slider("Compressor efficiency", 0.60, 0.95, 0.82, 0.01)
