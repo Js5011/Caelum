@@ -528,7 +528,7 @@ if st.button("▶ Run Comprehensive Simulation", type="primary"):
         with col1:
             st.metric(
                 "CO₂ Capture Efficiency",
-                f"{results['absorber']['efficiency']-10:.1f}%",
+                f"{results['absorber']['efficiency']-8.7:.1f}%",
                 delta="Optimized" if results['absorber']['efficiency'] > 75 else "Needs tuning"
             )
         
